@@ -1,7 +1,7 @@
 # vaultwardenGuide
 A guide on how to install and host vaultwarden. 
 
-This guide will show you one of many ways on how to run a personal vaultwarden instance. This method allows you to host behind your firewall, and as long as you have a VPN to your home network, you can access it from anywhere. All software and tools here will be completely free. Please keep in mind that I will be using Ubuntu, there may be differences if you are using other operating systems. All work will be done within the machine that is intended to host the vaultwarden instance
+This guide will show you one of many ways on how to run a personal vaultwarden instance. This method allows you to host privately WITH HTTPS, and as long as you have a VPN to your home network, you can access it from anywhere. All software and tools here will be completely free. Please keep in mind that I will be using Ubuntu, there may be differences if you are using other operating systems. All work will be done within the machine that is intended to host the vaultwarden instance
 
 It will be step by step, so hopefully anyone can follow along. However, to accomplish this, we will need to successfully utilize these technologies in order to deploy the application:
 
@@ -12,6 +12,11 @@ It will be step by step, so hopefully anyone can follow along. However, to accom
 - DuckDNS
 - Linux
 - tailscale
+
+## Initial Step
+
+1. Make a Directory called `vaultwarden` in your home profile. Shelve it for now, but later it will be needed when we make our `Caddyfile`, `Caddy` build and `docker-compose.yml`.
+
 
 ## Installing Docker
 
@@ -106,7 +111,78 @@ Now we can finally install xcaddy.
 `sudo apt update`
 `sudo apt install xcaddy`
 
+### Creating the Caddy Build
 
+Now that you have installed bot GO and xcaddy we can begin to compile our own caddy build. 
+
+Simply type `xcaddy build --with github.com/caddy-dns/duckdns`
+
+It will take a few minutes to compile, but once done it will spit out a `caddy` binary.
+
+And voila - you just compiled your own custom caddy build that includes a dns certificate challenge against duckDNS using let's encrypt. 
+
+Now move this `caddy` build into `~/vaultwarden` directory that you made on the first step.
+
+
+## DUCKDNS
+
+The next step will be for us create an account and to grab a free DNS name over at https://www.duckdns.org/. From here we can also grab the token that is required for the docker-compose.yml and caddy file.
+
+1. Once signed in, create a sub domain provided by Duck DNS.
+
+2. Find out the current internal IP of your vaultwarden host ( usually 192.168.x.x or 10.x.x.x) and assign it to the domain name.
+
+## Preparing Docker Compose and running the containers
+
+Now onto the fun part! 
+
+1. Navigate to the directory you made within the very first step 
+
+`cd ~/vaultwarden`
+
+2. make a docker compose file
+
+`touch docker-composeyml`
+
+3. Use nano to edit the file:
+
+`nano docker-compose.yml`
+
+4. Copy this into your docker-compose.yml and make sure that you change the variables for `EMAIL`, `DOMAIN` (your duckDNS domain), and `DUCKDNS_TOKEN` (your duckDNS token)
+
+- Important note: When entering the `DOMAIN` variable, please ensure that you continue to use the `https://` even though DUCKDNS's website specifies `http://`. This is because Caddy will be utilizing the `https://` service with port `:443`. If the prefix and the port mismatch (ie `http://` and `:443`) the docker container for Caddy will fail and restart over and over again. Resulting in :(. 
+
+```
+version: '3'
+
+services:
+  vaultwarden:
+    image: vaultwarden/server:latest
+    container_name: vaultwarden
+    restart: always
+    environment:
+      WEBSOCKET_ENABLED: "true"  # Enable WebSocket notifications.
+    volumes:
+      - ./vw-data:/data
+
+  caddy:
+    image: caddy:2
+    container_name: caddy
+    restart: always
+    ports:
+      - 80:80
+      - 443:443
+    volumes:
+      - ./caddy:/usr/bin/caddy  # Your custom build of Caddy.
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - ./caddy-config:/config
+      - ./caddy-data:/data
+    environment:
+      DOMAIN: "https://vaultwarden.example.com"  # Your domain.
+      EMAIL: "admin@example.com"                 # The email address to use for ACME registration.
+      DUCKDNS_TOKEN: "<token>"                   # Your Duck DNS token.
+      LOG_FILE: "/data/access.log"
+```
 
 
 
