@@ -229,12 +229,24 @@ If you have confirmed that all of the compoenents are there and are properl ycon
 While within the directory run:
 
 ```
-docker compose up 
+docker compose up -d
 ```
-If you see now errors, great! 
 
 Navigate to the domain that you made in DuckDNS. It should take you to the Vaultwarden login page. 
 
+if you are having trouble after running the docker compose command, you can run 
+
+``` 
+docker compose down
+```
+to stop the containers.
+
+You can then run: 
+``` 
+docker compose up
+```
+
+and it will run the containers and display information that is occuring within them. This can help find errors and troubleshoot. 
 
 
 
