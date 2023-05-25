@@ -132,7 +132,7 @@ The next step will be for us create an account and to grab a free DNS name over 
 
 2. Find out the current internal IP of your vaultwarden host ( usually 192.168.x.x or 10.x.x.x) and assign it to the domain name.
 
-## Preparing Docker Compose and running the containers
+## Preparing Docker Compose directory
 
 Now onto the fun part! 
 
@@ -184,10 +184,56 @@ services:
       LOG_FILE: "/data/access.log"
 ```
 
+5. Make a `Caddyfile` in your `~/vaultwarden` directory.
 
+```
+sudo touch Caddyfile
+```
 
+6. Copy these contents into the Caddyfile. There is no need to modify the `$DOMAIN` and `$DUCKDNS_TOKEN` variables, as they are passed as environmental variables in the docker compose file.
 
+```
+{$DOMAIN}:443 {
+  log {
+    level INFO
+    output file {$LOG_FILE} {
+      roll_size 10MB
+      roll_keep 10
+    }
+  }
 
+  # Use the ACME DNS-01 challenge to get a cert for the configured domain.
+  tls {
+    dns duckdns {$DUCKDNS_TOKEN}
+  }
+
+  # This setting may have compatibility issues with some browsers
+  # (e.g., attachment downloading on Firefox). Try disabling this
+  # if you encounter issues.
+  encode gzip
+
+  # Notifications redirected to the WebSocket server
+  reverse_proxy /notifications/hub vaultwarden:3012
+
+  # Proxy everything else to Rocket
+  reverse_proxy vaultwarden:80
+}
+```
+
+## Running the containers
+
+Once all said and done, you should be within your `~/vaultwarden` directory. The directory should contain a `docker-compose.yml` file, a `caddy` bindary, and a `Caddyfile`.
+
+If you have confirmed that all of the compoenents are there and are properl yconfigured, you are ready to run the docker-compose.yml.
+
+While within the directory run:
+
+```
+docker compose up 
+```
+If you see now errors, great! 
+
+Navigate to the domain that you made in DuckDNS. It should take you to the Vaultwarden login page. 
 
 
 
