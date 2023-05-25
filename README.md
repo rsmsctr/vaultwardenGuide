@@ -49,6 +49,8 @@ sudo apt-get install docker-ce docker-ce-cli containerd.io docker-buildx-plugin 
 
 Now that we have docker installed, we can move on to installing xcaddy, which is a program that allows us to make a custom caddy builds from source that include additional modules that are not typically included. We will be using xcaddy to make a Caddy build that allows use to a module that utilizes a [DNS certificate challenge](https://letsencrypt.org/docs/challenge-types/#dns-01-challenge) against DuckDNS. Caddy includes Let's Encrypt by default which will be performing this challenge. 
 
+### GO
+
 Right off the bat to utilize xcaddy, we need to make sure that we install the GO programming language which is a dependency for the xcaddy application. To do this we need to download the package from [GO's website](https://go.dev/dl/).
 
 1. Download the package for Linux:
@@ -62,6 +64,51 @@ Right off the bat to utilize xcaddy, we need to make sure that we install the GO
 3. You should see a GO application in your working directory. Move the installation to /usr/local
 
 `mv go /usr/local`
+
+4. Add GO to the PATH environment variable
+
+`export PATH=$PATH:/usr/local/go/bin`
+
+5. Also append that exact same line to the end of your .bashrc profile
+
+`cd ~`
+
+`nano .bashrc`
+
+Press `alt + /` to quickly navigate to the end of the file
+
+paste `export PATH=$PATH:/usr/local/go/bin` at the bottom of the file
+
+`ctrl + O` to save
+
+`ctrl + X` to exit
+
+6. Verify that GO is installed
+
+`go --version`
+
+### xcaddy 
+
+Now we can finally install xcaddy. 
+
+1. install debian keyrings and allow apt over https
+
+`sudo apt install -y debian-keyring debian-archive-keyring apt-transport-https`
+
+2. add cloudsmith repo that contains xcaddy
+
+`curl -1sLf 'https://dl.cloudsmith.io/public/caddy/xcaddy/gpg.key' | sudo gpg --dearmor -o /usr/share/keyrings/caddy-xcaddy-archive-keyring.gpg`
+
+`curl -1sLf 'https://dl.cloudsmith.io/public/caddy/xcaddy/debian.deb.txt' | sudo tee /etc/apt/sources.list.d/caddy-xcaddy.list`
+
+3. Update apt repos and install xcaddy
+
+`sudo apt update`
+`sudo apt install xcaddy`
+
+
+
+
 
 
 
