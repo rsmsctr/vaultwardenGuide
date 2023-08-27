@@ -132,9 +132,10 @@ Now move this `Caddy` build into `~/vaultwarden` directory that you made on the 
 
 The next step will be for us create an account and to grab a free DNS name over at https://www.duckdns.org/. From here we can also grab the token that is required for the `docker-compose.yml` and `Caddy` file.
 
-1. Once signed in, create a subdomain provided by DuckDNS.
+1. Once signed in, create a subdomain provided by DuckDNS and take note of the token.
+	- This token is meant to be private, make sure not to share it with anyone.
 
-2. Find out the current internal IP of your Vaultwarden host (usually 192.168.x.x or 10.x.x.x) and assign it to the subdomain that you just created.
+3. Find out the current internal IP of your Vaultwarden host (usually 192.168.x.x or 10.x.x.x) and assign it to the subdomain that you just created.
 
 ## Preparing Docker Compose directory
 
