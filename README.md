@@ -1,34 +1,37 @@
-# vaultwardenGuide
-A guide on how to install and host vaultwarden. 
+# Vaultwarden Guide
+A guide on how to install and host Vaultwarden. 
 
-This guide will show you one of many ways on how to run a personal vaultwarden instance. This method allows you to host privately WITH HTTPS, and as long as you have a VPN to your home network, you can access it from anywhere. All software and tools here will be completely free. Please keep in mind that I will be using Ubuntu, there may be differences if you are using other operating systems. All work will be done within the machine that is intended to host the vaultwarden instance
+This guide will show you how to run a personal Vaultwarden instance at home. This particular configuration allows you run the instance behind your firewall without having to expose port 80 for the HTTP-01 certificate challenge. Combined with a VPN, this proves to be a robust and private password managing solution.
 
-It will be step by step, so hopefully anyone can follow along. However, to accomplish this, we will need to successfully utilize these technologies in order to deploy the application:
+All software and tools here will be completely free. It will be step by step, so hopefully anyone can follow along. However, to accomplish this, we will need to successfully utilize these technologies in order to deploy the application:
 
 - Docker
-- Caddy Reverse Proxy utilizing DNS Cerificate Challenge (via let's Encrypt)
-- GO programming language (prerequisite for xcaddy)
-- xcaddy - Caddy package building tool
+- Caddy reverse proxy - utilizes DNS-01 certificate challenge (via ACME client)
+- GO programming language - prerequisite for xCaddy
+- xCaddy - Caddy package building tool
 - DuckDNS
 - Linux
-- tailscale
 
-## Initial Step
 
-1. Make a Directory called `vaultwarden` in your home profile. Shelve it for now, but later it will be needed when we make our `Caddyfile`, `Caddy` build and `docker-compose.yml`.
+
+## Initial step
+
+Make a Directory called `vaultwarden` in your home profile. Shelve it for now, but later it will be needed when we make our `Caddyfile`, `Caddy` build and `docker-compose.yml`.
+
 
 
 ## Installing Docker
 
-The first order of business is to install the docker engine and docker compose application on our linux host. I am personally using ubuntu LTS.
-To install the docker engine, it is recommended that we add the repository made by Docker as it is the most up to date and then install the applications from there. You can find the instructions [here](https://docs.docker.com/engine/install/ubuntu/) or follow along.
+The first order of business is to install the Docker Engine and Docker Compose application on our Linux host. This guide will be using the latest version of Ubuntu Server. 
+
+To install the Docker Engine, it is recommended that we add the repository made by Docker as it is the most up to date. The application from Docker's repository comes with Docker Compose. You can find the instructions [here](https://docs.docker.com/engine/install/ubuntu/) or follow along. You can omit the sudo commands if you are root.
 
 1. Update apt packages and allow apt to use a repository over https:
 ```
 sudo apt-get update
 sudo apt-get install ca-certificates curl gnupg
 ```
-2. Add Dockers GPG Key:
+2. Add Dockers GPG key:
 ```
 sudo install -m 0755 -d /etc/apt/keyrings
 curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo gpg --dearmor -o /etc/apt/keyrings/docker.gpg
@@ -41,7 +44,7 @@ echo \
   "$(. /etc/os-release && echo "$VERSION_CODENAME")" stable" | \
   sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
 ```
-5. Once the repository is added, update apt's index again:
+5. Once the repository is added, update apt index again:
 ```
 sudo apt-get update
 ```
@@ -50,107 +53,108 @@ sudo apt-get update
 sudo apt-get install docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
 ```
 
-## Installing xcaddy and building our custom caddy package
+## Installing xCaddy and building our custom Caddy package
 
-Now that we have docker installed, we can move on to installing xcaddy, which is a program that allows us to make a custom caddy builds from source that include additional modules that are not typically included. We will be using xcaddy to make a Caddy build that allows use to a module that utilizes a [DNS certificate challenge](https://letsencrypt.org/docs/challenge-types/#dns-01-challenge) against DuckDNS. Caddy includes Let's Encrypt by default which will be performing this challenge. 
-
+Now that we have Docker installed, we can move on to installing xCaddy, which is a program that allows us to make a custom Caddy build. This build will be compiled from source because it needs to include an additional module that is not in the base package. This module will allow us to utilize the [DNS-01 certificate challenge](https://letsencrypt.org/docs/challenge-types/#dns-01-challenge)  by the ACME client on the reverse proxy. 
 ### GO
 
-Right off the bat to utilize xcaddy, we need to make sure that we install the GO programming language which is a dependency for the xcaddy application. To do this we need to download the package from [GO's website](https://go.dev/dl/).
+To utilize xCaddy, we need to make sure that we install the GO programming language which is a dependency for the xCaddy application. To do this we need to download the package from [GO's website](https://go.dev/dl/).
 
-1. Download the package for Linux:
+1. Download and extract the package:
+```
+wget https://go.dev/dl/go1.20.4.linux-amd64.tar.gz
+tar -xzf go1.20.4.linux-amd64.tar.gz
+```
+2. You should see a GO application in your working directory. Move the installation to `/usr/local`:
+```
+mv go /usr/local
+```
+3. Add GO to the PATH environment variable
+```
+export PATH=$PATH:/usr/local/go/bin
+```
+4. Append that exact same line to the end of your `~/.bashrc` profile:
+```
+cd ~
+nano .bashrc
+```
 
-`wget https://go.dev/dl/go1.20.4.linux-amd64.tar.gz`
+Press `alt + /` to quickly navigate to the end of the file.
 
-2. Extract the package:
+paste `export PATH=$PATH:/usr/local/go/bin` at the bottom of the file.
 
-`tar -xzf go1.20.4.linux-amd64.tar.gz`
+`ctrl + O` to save.
 
-3. You should see a GO application in your working directory. Move the installation to /usr/local
+`ctrl + X` to exit.
 
-`mv go /usr/local`
+6. Verify that GO is installed:
+```
+go --version
+```
 
-4. Add GO to the PATH environment variable
 
-`export PATH=$PATH:/usr/local/go/bin`
+### xCaddy 
 
-5. Also append that exact same line to the end of your .bashrc profile
+Now we can install xCaddy. 
 
-`cd ~`
+1. Install Debian keyrings and allow apt over https:
+```
+sudo apt install -y debian-keyring debian-archive-keyring apt-transport-https
+```
+2. Add Cloudsmith repository that contains xCaddy:
+```
+curl -1sLf 'https://dl.cloudsmith.io/public/caddy/xcaddy/gpg.key' | sudo gpg --dearmor -o /usr/share/keyrings/caddy-xcaddy-archive-keyring.gpg
 
-`nano .bashrc`
+curl -1sLf 'https://dl.cloudsmith.io/public/caddy/xcaddy/debian.deb.txt' | sudo tee /etc/apt/sources.list.d/caddy-xcaddy.list
+```
+3. Update apt repositories and install xCaddy:
+```
+sudo apt update
+sudo apt install xcaddy
+```
 
-Press `alt + /` to quickly navigate to the end of the file
-
-paste `export PATH=$PATH:/usr/local/go/bin` at the bottom of the file
-
-`ctrl + O` to save
-
-`ctrl + X` to exit
-
-6. Verify that GO is installed
-
-`go --version`
-
-### xcaddy 
-
-Now we can finally install xcaddy. 
-
-1. install debian keyrings and allow apt over https
-
-`sudo apt install -y debian-keyring debian-archive-keyring apt-transport-https`
-
-2. add cloudsmith repo that contains xcaddy
-
-`curl -1sLf 'https://dl.cloudsmith.io/public/caddy/xcaddy/gpg.key' | sudo gpg --dearmor -o /usr/share/keyrings/caddy-xcaddy-archive-keyring.gpg`
-
-`curl -1sLf 'https://dl.cloudsmith.io/public/caddy/xcaddy/debian.deb.txt' | sudo tee /etc/apt/sources.list.d/caddy-xcaddy.list`
-
-3. Update apt repos and install xcaddy
-
-`sudo apt update`
-`sudo apt install xcaddy`
 
 ### Creating the Caddy Build
 
-Now that you have installed bot GO and xcaddy we can begin to compile our own caddy build. 
+Now that you have installed bot GO and xCaddy we can begin to compile our own caddy build. 
 
-Simply type `xcaddy build --with github.com/caddy-dns/duckdns`
+```
+xcaddy build --with github.com/caddy-dns/duckdns
+```
 
-It will take a few minutes to compile, but once done it will spit out a `caddy` binary.
+It will take a few minutes to compile, but once done it will spit out a `Caddy` binary.
 
-And voila - you just compiled your own custom caddy build that includes a dns certificate challenge against duckDNS using let's encrypt. 
+And voila. You just compiled your own custom Caddy build that includes a DNS-01 certificate challenge against DuckDNS using ACME. 
 
-Now move this `caddy` build into `~/vaultwarden` directory that you made on the first step.
+Now move this `Caddy` build into `~/vaultwarden` directory that you made on the first step.
 
+## DuckDNS
 
-## DUCKDNS
+The next step will be for us create an account and to grab a free DNS name over at https://www.duckdns.org/. From here we can also grab the token that is required for the `docker-compose.yml` and `Caddy` file.
 
-The next step will be for us create an account and to grab a free DNS name over at https://www.duckdns.org/. From here we can also grab the token that is required for the docker-compose.yml and caddy file.
+1. Once signed in, create a subdomain provided by DuckDNS.
 
-1. Once signed in, create a sub domain provided by Duck DNS.
-
-2. Find out the current internal IP of your vaultwarden host ( usually 192.168.x.x or 10.x.x.x) and assign it to the domain name.
+2. Find out the current internal IP of your Vaultwarden host (usually 192.168.x.x or 10.x.x.x) and assign it to the subdomain that you just created.
 
 ## Preparing Docker Compose directory
 
 Now onto the fun part! 
 
-1. Navigate to the directory you made within the very first step 
+1. Navigate to the `vaultwarden` directory you made within the very first step:
+```
+cd ~/vaultwarden
+```
+2. Make a Docker Compose file:
+```
+touch docker-compose.yml
+```
+3. Use Nano to edit the file:
+```
+nano docker-compose.yml
+```
+4. Copy the contents below into your `docker-compose.yml` and make sure that you change the variables for `EMAIL`, `DOMAIN` (your DuckDNS domain), and `DUCKDNS_TOKEN` (your DuckDNS token).
 
-`cd ~/vaultwarden`
-
-2. make a docker compose file
-
-`touch docker-composeyml`
-
-3. Use nano to edit the file:
-
-`nano docker-compose.yml`
-
-4. Copy this into your docker-compose.yml and make sure that you change the variables for `EMAIL`, `DOMAIN` (your duckDNS domain), and `DUCKDNS_TOKEN` (your duckDNS token)
-
-- Important note: When entering the `DOMAIN` variable, please ensure that you continue to use the `https://` even though DUCKDNS's website specifies `http://`. This is because Caddy will be utilizing the `https://` service with port `:443`. If the prefix and the port mismatch (ie `http://` and `:443`) the docker container for Caddy will fail and restart over and over again. Resulting in :(. 
+	- Important note: When entering the `DOMAIN` variable, please ensure that you continue to use the `https://` even though DuckDNS's website specifies `http://`. This is because Caddy will be utilizing the `https://` service with port `:443`. If the prefix and the port mismatch (i.e. `http://` and `:443`) the Docker container for Caddy will fail and restart over and over again.
 
 ```
 version: '3'
@@ -183,15 +187,11 @@ services:
       DUCKDNS_TOKEN: "<token>"                   # Your Duck DNS token.
       LOG_FILE: "/data/access.log"
 ```
-
-5. Make a `Caddyfile` in your `~/vaultwarden` directory.
-
+5. Make a `Caddyfile` in your `~/vaultwarden` directory:
 ```
 sudo touch Caddyfile
 ```
-
-6. Copy these contents into the Caddyfile. There is no need to modify the `$DOMAIN` and `$DUCKDNS_TOKEN` variables, as they are passed as environmental variables in the docker compose file.
-
+6. Copy the contents below into the `Caddyfile`. There is no need to modify the `$DOMAIN` and `$DUCKDNS_TOKEN` variables, as they are passed as environmental variables when Docker Composition starts.
 ```
 {$DOMAIN}:443 {
   log {
@@ -222,36 +222,29 @@ sudo touch Caddyfile
 
 ## Running the containers
 
-Once all said and done, you should be within your `~/vaultwarden` directory. The directory should contain a `docker-compose.yml` file, a `caddy` bindary, and a `Caddyfile`.
+Once all said and done, you should be within your `~/vaultwarden` directory. The directory should contain a `docker-compose.yml` file, a `Caddy` binary, and a `Caddyfile`.
 
-If you have confirmed that all of the compoenents are there and are properl yconfigured, you are ready to run the docker-compose.yml.
+If you have confirmed that all of the components are there and are properly configured, you are ready to kick off the Docker Composition with your  `docker-compose.yml` file.
 
 While within the directory run:
+```
+sudo docker compose up -d
+```
 
-```
-docker compose up -d
-```
+## Verify
 
 Navigate to the domain that you made in DuckDNS. It should take you to the Vaultwarden login page. 
 
-if you are having trouble after running the docker compose command, you can run 
-
+If you are having trouble with the setup after running the Docker Compose command, you can run the command below to stop the containers and troubleshoot:
 ``` 
-docker compose down
+sudo docker compose down
 ```
-to stop the containers.
-
 You can then run: 
 ``` 
-docker compose up
+sudo docker compose up
 ```
 
-and it will run the containers and display information that is occuring within them. This can help find errors and troubleshoot. 
-
-
-
-
-
+This will run the containers and display information that is occurring within them. This can help find errors and troubleshoot. 
 
 
 
