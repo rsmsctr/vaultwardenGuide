@@ -116,7 +116,7 @@ sudo apt install xcaddy
 
 ### Creating the Caddy Build
 
-Now that you have installed bot GO and xCaddy we can begin to compile our own caddy build. 
+Now that we have installed GO and xCaddy we can begin to compile our own Caddy build. 
 
 ```
 xcaddy build --with github.com/caddy-dns/duckdns
